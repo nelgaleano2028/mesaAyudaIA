@@ -1,0 +1,78 @@
+openapi: 3.0.3
+info:
+  title: Servicio de Solicitudes Corporativas (simulado)
+  version: 1.4.0
+  description: >
+    Servicio externo simulado para la Prueba Técnica de Nivelación.
+    Presenta latencia variable (0,1 a 2,5 s), errores 500 en aproximadamente
+    el 12 % de las peticiones y respuestas 429 en el 5 %. Diseñe su cliente
+    asumiendo que este servicio falla.
+servers:
+  - url: http://localhost:8080
+security:
+  - bearerAuth: []
+paths:
+  /health:
+    get:
+      summary: Estado del servicio
+      security: []
+      responses:
+        '200': { description: Servicio operativo }
+  /solicitudes:
+    get:
+      summary: Lista solicitudes
+      parameters:
+        - { in: query, name: area,   schema: { type: string } }
+        - { in: query, name: estado, schema: { type: string } }
+        - { in: query, name: limite, schema: { type: integer, default: 50, minimum: 1, maximum: 200 } }
+      responses:
+        '200': { description: Listado }
+        '401': { description: Token ausente o inválido }
+        '429': { description: Límite de tasa. Ver cabecera Retry-After }
+        '500': { description: Error del proveedor }
+    post:
+      summary: Crea una solicitud
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: false
+          schema: { type: string }
+          description: Dos peticiones con la misma clave devuelven la misma solicitud.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SolicitudEntrada' }
+      responses:
+        '201': { description: Creada }
+        '401': { description: Token ausente o inválido }
+        '422': { description: Cuerpo inválido }
+        '429': { description: Límite de tasa }
+        '500': { description: Error del proveedor }
+  /solicitudes/{id_solicitud}:
+    get:
+      summary: Obtiene una solicitud
+      parameters:
+        - { in: path, name: id_solicitud, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Encontrada }
+        '404': { description: No existe }
+  /webhook/mensajeria:
+    post:
+      summary: Punto de entrada del segundo sistema (etapa 4)
+      description: Puede recibir el mismo evento más de una vez y en desorden.
+      responses:
+        '200': { description: Recibido }
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer }
+  schemas:
+    SolicitudEntrada:
+      type: object
+      required: [asunto, area, solicitante]
+      properties:
+        asunto:      { type: string, minLength: 5,  maxLength: 200 }
+        descripcion: { type: string, maxLength: 4000 }
+        area:        { type: string, minLength: 2,  maxLength: 80 }
+        solicitante: { type: string, minLength: 5,  maxLength: 120 }
+        canal:       { type: string, default: api }

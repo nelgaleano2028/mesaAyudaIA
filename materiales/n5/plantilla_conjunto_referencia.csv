@@ -1,0 +1,6 @@
+id_caso,pregunta_o_texto,respuesta_o_categoria_esperada,documento_fuente,seccion_fuente,observacion
+GS-001,¿Con cuánta anticipación debo solicitar vacaciones?,15 días calendario,POL-GTH-01_Vacaciones.pdf,3.1,Caso con respuesta explícita en el documento
+GS-002,¿Cuánto me reconocen de hospedaje en un municipio no capital?,$180.000 diarios,POL-ADM-04_Viaticos.pdf,3,Verificar que no confunda con el valor de ciudad capital
+GS-003,¿Puedo trabajar desde casa tres días a la semana?,SIN EVIDENCIA EN LOS DOCUMENTOS,,,Caso de abstención — no existe política de teletrabajo en el corpus
+GS-004,Mi portátil no enciende desde ayer,Hardware,,,Caso de clasificación
+GS-005,,,,,Complete hasta al menos 50 casos

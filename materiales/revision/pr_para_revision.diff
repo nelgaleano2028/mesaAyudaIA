@@ -1,0 +1,135 @@
+From 8c41e0a2f7b3d915c6a4e88b12f0d7ac93be5510 Mon Sep 17 00:00:00 2001
+From: Equipo Aplicaciones <aplicaciones@lafortuna.com.co>
+Date: Tue, 21 Jul 2026 16:42:11 -0500
+Subject: [PATCH] feat(mesa-ayuda): resumen mensual con clasificacion asistida
+ por IA
+
+Se agrega el endpoint de resumen mensual y la clasificacion automatica
+de tickets pendientes usando el proveedor de lenguaje.
+
+---
+ app/reportes.py | 118 ++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 118 insertions(+)
+
+diff --git a/app/reportes.py b/app/reportes.py
+index e69de29..a7f31c8 100644
+--- a/app/reportes.py
++++ b/app/reportes.py
+@@ -0,0 +1,118 @@
++import requests
++from datetime import datetime
++from app.db import get_connection
++
++OPENAI_API_KEY = "sk-proj-7Kd92LmQx4TvR8nZaWp1YbHc3EjF6UgS0AiDoNe5"
++MODEL_URL = "https://api.proveedor-llm.com/v1/chat/completions"
++
++
++def generar_resumen_mensual(anio, mes, area_filtro=None, incluirCerrados=True,
++                            formato="json", usuario_solicitante=None):
++    """Genera el resumen mensual de tickets del area y clasifica los pendientes."""
++    conn = get_connection()
++    cursor = conn.cursor()
++    conn.begin()
++
++    fecha_inicio = datetime(anio, mes, 1)
++    if mes == 12:
++        fecha_fin = datetime(anio + 1, 1, 1)
++    else:
++        fecha_fin = datetime(anio, mes + 1, 1)
++
++    query = "SELECT id_ticket, codigo, id_area, categoria, prioridad, estado, " \
++            "fecha_creacion, fecha_cierre, asunto, descripcion FROM tickets " \
++            "WHERE fecha_creacion > '" + str(fecha_inicio) + "' " \
++            "AND fecha_creacion < '" + str(fecha_fin) + "'"
++
++    if area_filtro:
++        query = query + " AND id_area = " + str(area_filtro)
++
++    if usuario_solicitante:
++        query = query + " AND id_usuario IN (SELECT id_usuario FROM usuarios " \
++                        "WHERE correo = '" + usuario_solicitante + "')"
++
++    cursor.execute(query)
++    rows = cursor.fetchall()
++
++    resultado = []
++    total_abiertos = 0
++    total_cerrados = 0
++    total_reaperturas = 0
++    suma_dias = 0
++    contador_dias = 0
++
++    for row in rows:
++        ticket = {
++            "id": row[0], "codigo": row[1], "id_area": row[2],
++            "categoria": row[3], "prioridad": row[4], "estado": row[5],
++            "fecha_creacion": row[6], "fecha_cierre": row[7],
++            "asunto": row[8], "descripcion": row[9],
++        }
++
++        cursor.execute("SELECT nombre, sede FROM areas WHERE id_area = %s" % row[2])
++        area = cursor.fetchone()
++        ticket["area_nombre"] = area[0]
++        ticket["area_sede"] = area[1]
++
++        cursor.execute("SELECT COUNT(*) FROM adjuntos WHERE id_ticket = %s" % row[0])
++        ticket["cantidad_adjuntos"] = cursor.fetchone()[0]
++
++        cursor.execute("SELECT COUNT(*) FROM historial_estado WHERE id_ticket = %s "
++                       "AND estado_nuevo = 'Reabierto'" % row[0])
++        reab = cursor.fetchone()[0]
++        ticket["reaperturas"] = reab
++        total_reaperturas = total_reaperturas + reab
++
++        if ticket["estado"] == "Cerrado":
++            total_cerrados = total_cerrados + 1
++            if ticket["fecha_cierre"]:
++                dias = (ticket["fecha_cierre"] - ticket["fecha_creacion"]).days
++                suma_dias = suma_dias + dias
++                contador_dias = contador_dias + 1
++        else:
++            total_abiertos = total_abiertos + 1
++
++        if not ticket["categoria"] or ticket["categoria"] == "Sin clasificar":
++            prompt = "Clasifica el siguiente ticket en una categoria. " \
++                     "Asunto: " + str(ticket["asunto"]) + \
++                     " Descripcion: " + str(ticket["descripcion"])
++            respuesta = requests.post(
++                MODEL_URL,
++                headers={"Authorization": "Bearer " + OPENAI_API_KEY},
++                json={"model": "gpt-4", "messages": [{"role": "user", "content": prompt}]},
++            )
++            categoria_ia = respuesta.json()["choices"][0]["message"]["content"]
++            ticket["categoria"] = categoria_ia
++            cursor.execute("UPDATE tickets SET categoria = '" + categoria_ia +
++                           "' WHERE id_ticket = " + str(row[0]))
++
++        if incluirCerrados == False and ticket["estado"] == "Cerrado":
++            continue
++
++        resultado.append(ticket)
++
++    promedio = suma_dias / contador_dias
++
++    resumen = {
++        "periodo": str(anio) + "-" + str(mes),
++        "total": len(resultado),
++        "abiertos": total_abiertos,
++        "cerrados": total_cerrados,
++        "reaperturas": total_reaperturas,
++        "promedio_dias_atencion": promedio,
++        "tickets": resultado,
++    }
++
++    conn.commit()
++    cursor.close()
++    conn.close()
++
++    if formato == "csv":
++        linea = "codigo,area,categoria,prioridad,estado\n"
++        for t in resultado:
++            linea = linea + t["codigo"] + "," + t["area_nombre"] + "," + \
++                    t["categoria"] + "," + t["prioridad"] + "," + t["estado"] + "\n"
++        return linea
++
++    return resumen
