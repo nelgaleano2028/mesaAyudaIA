@@ -1,6 +1,11 @@
-# Declaración de uso de IA
+# Declaraciï¿½n de uso de IA
 
 ## Etapa inicial
-- Se preparó la estructura del repositorio y se validó la copia de los materiales.
-- Se revisó manualmente la organización del proyecto y su conformidad con el prompt maestro.
-- Herramienta utilizada: asistencia de IA para orientar la preparación inicial y revisar la estructura del repositorio.
+- Se preparï¿½ la estructura del repositorio y se validï¿½ la copia de los materiales.
+- Se revisï¿½ manualmente la organizaciï¿½n del proyecto y su conformidad con el prompt maestro.
+- Herramienta utilizada: asistencia de IA para orientar la preparaciï¿½n inicial y revisar la estructura del repositorio.
+## Etapa 1
+- Se utilizÃ³ asistencia de IA para proponer la estructura de mÃ³dulos, la estrategia de normalizaciÃ³n de fechas y categorÃ­as, y la lÃ³gica de reintentos del cliente del servicio mock.
+- Se revisÃ³ y ajustÃ³ manualmente el criterio de deduplicaciÃ³n para evitar falsos positivos sobre tickets lÃ³gicamente iguales con IDs distintos.
+- Se validÃ³ con pruebas reales usando `pytest` y con un arranque local del servicio mock en `uvicorn`.
+- Herramienta utilizada: asistencia de IA en el editor y anÃ¡lisis de datos del CSV y del servicio mock.
