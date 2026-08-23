@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel, Field, field_validator
 
 load_dotenv(Path(__file__).resolve().parents[2] / ".env")
@@ -111,6 +111,40 @@ def obtener_solicitud(id: str):
     if row is None:
         raise HTTPException(status_code=404, detail=f"Solicitud {id} no encontrada.")
     return _serialize_row(row)
+
+
+@app.get("/solicitudes")
+def listar_solicitudes(
+    area: str | None = Query(default=None),
+    estado: str | None = Query(default=None),
+    prioridad: str | None = Query(default=None),
+    desde: str | None = Query(default=None),
+    hasta: str | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+):
+    query = "SELECT * FROM solicitudes WHERE 1=1"
+    params: list[Any] = []
+    if area:
+        query += " AND area = ?"
+        params.append(area)
+    if estado:
+        query += " AND estado = ?"
+        params.append(estado)
+    if prioridad:
+        query += " AND prioridad = ?"
+        params.append(prioridad)
+    if desde:
+        query += " AND fecha_creacion >= ?"
+        params.append(desde)
+    if hasta:
+        query += " AND fecha_creacion <= ?"
+        params.append(hasta)
+    query += " ORDER BY id DESC LIMIT ? OFFSET ?"
+    params.extend([limit, offset])
+    with get_connection() as conn:
+        rows = conn.execute(query, params).fetchall()
+    return [_serialize_row(row) for row in rows]
 
 
 @app.get("/health")
