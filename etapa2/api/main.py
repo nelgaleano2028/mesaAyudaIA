@@ -2,23 +2,18 @@ from __future__ import annotations
 
 import os
 import sqlite3
+from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field, field_validator
 
 load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
 DB_PATH = Path(os.getenv("DATABASE_PATH", "data/app.db"))
 DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-
-logger = logging.getLogger("mesa_ayuda_api")
-logger.setLevel(logging.INFO)
-if not logger.handlers:
-    handler = logging.StreamHandler()
-    handler.setFormatter(logging.Formatter('{"timestamp":"%(asctime)s","level":"%(levelname)s","message":%(message)s}', datefmt="%Y-%m-%dT%H:%M:%S"))
-    logger.addHandler(handler)
 
 app = FastAPI(title="Mesa de Ayuda Inteligente API", version="0.1.0")
 
@@ -84,6 +79,29 @@ def init_db() -> None:
             """
         )
         conn.commit()
+
+
+def _serialize_row(row: sqlite3.Row) -> dict[str, Any]:
+    return {key: row[key] for key in row.keys()}
+
+
+@app.post("/solicitudes", response_model=SolicitudOut, status_code=201)
+def crear_solicitud(payload: SolicitudInput):
+    now = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+    with get_connection() as conn:
+        cursor = conn.execute(
+            """
+            INSERT INTO solicitudes (asunto, descripcion, area, canal, solicitante, estado, fecha_creacion)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (payload.asunto, payload.descripcion, payload.area, payload.canal, payload.solicitante, "pendiente", now),
+        )
+        conn.commit()
+        row = conn.execute("SELECT * FROM solicitudes WHERE id = ?", (cursor.lastrowid,)).fetchone()
+    if row is None:
+        raise HTTPException(status_code=500, detail="No se pudo crear la solicitud.")
+    data = _serialize_row(row)
+    return {key: data[key] for key in SolicitudOut.model_fields}
 
 
 @app.get("/health")
