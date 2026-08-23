@@ -104,6 +104,15 @@ def crear_solicitud(payload: SolicitudInput):
     return {key: data[key] for key in SolicitudOut.model_fields}
 
 
+@app.get("/solicitudes/{id}")
+def obtener_solicitud(id: str):
+    with get_connection() as conn:
+        row = conn.execute("SELECT * FROM solicitudes WHERE id = ?", (id,)).fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"Solicitud {id} no encontrada.")
+    return _serialize_row(row)
+
+
 @app.get("/health")
 def health():
     return {"status": "ok"}
