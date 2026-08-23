@@ -13,6 +13,8 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
 
+from etapa2.clasificador.claude_client import ResultadoClasificacion, clasificar
+
 load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
 DB_PATH = Path(os.getenv("DATABASE_PATH", "data/app.db"))
@@ -130,13 +132,26 @@ def _serialize_row(row: sqlite3.Row) -> dict[str, Any]:
 @app.post("/solicitudes", response_model=SolicitudOut, status_code=201)
 def crear_solicitud(payload: SolicitudInput):
     now = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+    resultado: ResultadoClasificacion = clasificar(f"{payload.asunto} {payload.descripcion}".strip())
+    estado = "pendiente_revision" if resultado.modo == "degradado" else "clasificado"
     with get_connection() as conn:
         cursor = conn.execute(
             """
-            INSERT INTO solicitudes (asunto, descripcion, area, canal, solicitante, estado, fecha_creacion)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO solicitudes (asunto, descripcion, area, canal, solicitante, estado, prioridad, categoria, fecha_creacion, fecha_clasificacion)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (payload.asunto, payload.descripcion, payload.area, payload.canal, payload.solicitante, "pendiente", now),
+            (
+                payload.asunto,
+                payload.descripcion,
+                payload.area,
+                payload.canal,
+                payload.solicitante,
+                estado,
+                resultado.prioridad,
+                resultado.categoria,
+                now,
+                now if resultado.modo == "clasificado" else None,
+            ),
         )
         conn.commit()
         row = conn.execute("SELECT * FROM solicitudes WHERE id = ?", (cursor.lastrowid,)).fetchone()
