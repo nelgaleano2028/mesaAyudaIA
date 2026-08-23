@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import logging
 import sqlite3
@@ -23,6 +24,14 @@ DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 app = FastAPI(title="Mesa de Ayuda Inteligente API", version="0.1.0")
 
 logger = logging.getLogger("mesa_ayuda_api")
+logger.setLevel(logging.INFO)
+if not logger.handlers:
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter(
+        '{"timestamp":"%(asctime)s","level":"%(levelname)s","message":%(message)s}',
+        datefmt="%Y-%m-%dT%H:%M:%S",
+    ))
+    logger.addHandler(handler)
 
 
 class SolicitudInput(BaseModel):
@@ -134,6 +143,13 @@ def crear_solicitud(payload: SolicitudInput):
     now = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
     resultado: ResultadoClasificacion = clasificar(f"{payload.asunto} {payload.descripcion}".strip())
     estado = "pendiente_revision" if resultado.modo == "degradado" else "clasificado"
+    logger.info(json.dumps({
+        "event": "solicitud_creada",
+        "area": payload.area,
+        "canal": payload.canal,
+        "estado": estado,
+        "modo_clasificacion": resultado.modo,
+    }, ensure_ascii=False))
     with get_connection() as conn:
         cursor = conn.execute(
             """
