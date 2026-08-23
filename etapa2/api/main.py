@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import os
+import logging
 import sqlite3
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
 
 load_dotenv(Path(__file__).resolve().parents[2] / ".env")
@@ -16,6 +19,8 @@ DB_PATH = Path(os.getenv("DATABASE_PATH", "data/app.db"))
 DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 app = FastAPI(title="Mesa de Ayuda Inteligente API", version="0.1.0")
+
+logger = logging.getLogger("mesa_ayuda_api")
 
 
 class SolicitudInput(BaseModel):
@@ -51,6 +56,43 @@ class SolicitudOut(BaseModel):
     prioridad: str | None = None
     categoria: str | None = None
     fecha_creacion: str
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(_: Request, exc: RequestValidationError):
+    return JSONResponse(
+        status_code=422,
+        content={
+            "error": {
+                "code": "validation_error",
+                "message": "La entrada recibida no es válida.",
+                "details": exc.errors(),
+            }
+        },
+    )
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(_: Request, exc: HTTPException):
+    detail = exc.detail if isinstance(exc.detail, dict) else {
+        "code": "http_error",
+        "message": str(exc.detail),
+    }
+    return JSONResponse(status_code=exc.status_code, content={"error": detail})
+
+
+@app.exception_handler(Exception)
+async def generic_exception_handler(_: Request, exc: Exception):
+    logger.exception("error_interno_api", extra={"type": type(exc).__name__})
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": {
+                "code": "internal_error",
+                "message": "Ocurrió un error inesperado en la API.",
+            }
+        },
+    )
 
 
 def get_connection() -> sqlite3.Connection:
